@@ -384,7 +384,22 @@ else:
 
 if USE_SERIALPORT_MIDI:
     import serial
-    ser = serial.Serial('/dev/ttyAMA0', baudrate=31250)
+
+    # Open serial port
+    ser = serial.Serial('/dev/serial0', baudrate=38400)
+    # NOTE: Although the serial port here is opened with 38400 baud, it's a hack and actually runs at 31250 baud.
+    #       This hack requires to also "underclock" the UART0 peripheral clock in /boot/config.tx and .boot/cmdline.txt
+    #       See     : https://www.raspberrypi.org/forums/viewtopic.php?t=161577
+    #       And/Or  : http://m0xpd.blogspot.com/2013/01/midi-controller-on-rpi.html
+    #
+    #       Providing a baudrate of 31250 does not work, as the Pi serial driver does not officially support this
+    #       baudrate. Attempting to do so will deliver some jankey data when attempting to read MIDI messages over
+    #       the serial port.
+    #
+    #       Also very epic: This hack apparently only works with older Raspbian kernels (3.18.x seems safe, from around
+    #       4.x.x it breaks). The iso image provided in this project thus comes with an older kernel that supports this
+    #       hack.
+
     def MidiSerialCallback():
         message = [0, 0, 0]
         while True:
