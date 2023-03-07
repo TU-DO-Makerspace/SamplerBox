@@ -6,7 +6,9 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
-RELEASES="https://github.com/josephernest/SamplerBox/releases/"
+USE_RELEASE="https://github.com/josephernest/SamplerBox/releases/download/2022-08-10-release/samplerbox_20220810.zip"
+RELEASE_FILE_NAME="$(basename $USE_RELEASE)"
+
 OUTPUT="samplerbox"
 
 # Get dir of this script and cd into it
@@ -29,23 +31,16 @@ root_dir="$TMP_IMG_DIR/root"
 
 cd $SCRIPT_DIR
 
-# Fetch latest sampler box release
-
-api_latest_release_url="$(sed 's|github.com|api.github.com/repos|' <<< $RELEASES)latest"
-file_name="$(curl -s $api_latest_release_url | grep -oP -m 1 'samplerbox_[0-9.]+.zip')"
+# Download samplerbox release
 
 # Check if file already exists
-if [ -f $file_name ]; then
-    echo "mkimg: $file_name already exists"
+if [ -f $RELEASE_FILE_NAME ]; then
+    echo "mkimg: $RELEASE_FILE_NAME already exists"
     echo "mkimg: Skipping download"
 else
-    echo "mkimg: Downloading $file_name"
-    curl -s "$api_latest_release_url" \
-    | grep "browser_download_url.*zip" \
-    | cut -d : -f 2,3 \
-    | tr -d \" \
-    | wget -i -
-    chmod 777 $file_name
+    echo "mkimg: Downloading $RELEASE_FILE_NAME"
+    wget $USE_RELEASE
+    chmod 777 $RELEASE_FILE_NAME
 fi
 
 if [ -f $OUTPUT.img ]; then
@@ -73,14 +68,14 @@ if [ -d $TMP_IMG_DIR ]; then
     fi
 fi
 
-echo "mkimg: Unzipping $file_name to $TMP_IMG_DIR"
+echo "mkimg: Unzipping $RELEASE_FILE_NAME to $TMP_IMG_DIR"
 
 # Unzip file and cd into directory
-unzip -o $file_name -d $TMP_IMG_DIR
+unzip -o $RELEASE_FILE_NAME -d $TMP_IMG_DIR
 if [ $? -eq 0 ]; then
-    echo "mkimg: Unzipped $file_name"
+    echo "mkimg: Unzipped $RELEASE_FILE_NAME"
 else
-    echo "mkimg: Failed to unzip $file_name"
+    echo "mkimg: Failed to unzip $RELEASE_FILE_NAME"
     exit 1
 fi
 
