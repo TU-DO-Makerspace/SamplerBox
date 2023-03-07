@@ -18,7 +18,7 @@ NAME_OF_SCRIPT_DIR="$(basename $SCRIPT_DIR)"
 
 TMP_IMG_DIR="/tmp/samplerbox_mkimg"
 boot_dir="$TMP_IMG_DIR/boot"
-root_dir="$TMP_IMG_DIR/root"
+rootfs_dir="$TMP_IMG_DIR/rootfs"
 
 # Check if required tools are installed
 
@@ -71,7 +71,7 @@ if [ -d $TMP_IMG_DIR ]; then
     echo "mkimg: $TMP_IMG_DIR already exists"
     echo "mkimg: Removing $TMP_IMG_DIR"
     umount $boot_dir || /bin/true
-    umount $root_dir || /bin/true
+    umount $rootfs_dir || /bin/true
     rm -r $TMP_IMG_DIR
     if [ $? -eq 0 ]; then
         echo "mkimg: Removed $TMP_IMG_DIR"
@@ -110,7 +110,7 @@ fi
 
 # Mount image
 mkdir -p $boot_dir
-mkdir -p $root_dir
+mkdir -p $rootfs_dir
 
 mount -o loop /dev/mapper/${loop_dev[0]} $boot_dir
 
@@ -121,10 +121,10 @@ else
     exit 1
 fi
 
-mount -o loop /dev/mapper/${loop_dev[1]} $root_dir
+mount -o loop /dev/mapper/${loop_dev[1]} $rootfs_dir
 
 if [ $? -eq 0 ]; then
-    echo "mkimg: Mounted root partition: $root_dir"
+    echo "mkimg: Mounted root partition: $rootfs_dir"
 else
     echo "mkimg: Failed to mount root partition"
     exit 1
@@ -143,14 +143,14 @@ else
 fi
 
 echo "mkimg: Copying root files..."
-cp -v -r $SCRIPT_DIR/root/etc/* $root_dir/etc
+cp -v -r $SCRIPT_DIR/root/etc/* $rootfs_dir/etc
 
 if [ $? -ne 0 ]; then
     echo "mkimg: Failed to copy root files"
     exit 1
 fi
 
-cp -r $SCRIPT_DIR/root/root/* $root_dir
+cp -r $SCRIPT_DIR/root/root/* $rootfs_dir
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Copied root files"
@@ -161,9 +161,9 @@ fi
 
 echo "mkimg: Copying SamplerBox files..."
 
-if [ -d $root_dir/root/SamplerBox ]; then
+if [ -d $rootfs_dir/root/SamplerBox ]; then
     echo "mkimg: Removing old SamplerBox files"
-    rm -r $root_dir/root/SamplerBox
+    rm -r $rootfs_dir/root/SamplerBox
     if [ $? -eq 0 ]; then
         echo "mkimg: Removed old SamplerBox files"
     else
@@ -172,9 +172,9 @@ if [ -d $root_dir/root/SamplerBox ]; then
     fi
 fi
 
-mkdir -p $root_dir/root/SamplerBox
-rsync -av --exclude="*.zip" --exclude="*.img" $REPO_DIR/* $root_dir/root/SamplerBox
-cp -r -v $REPO_DIR/.git* $root_dir/root/SamplerBox
+mkdir -p $rootfs_dir/root/SamplerBox
+rsync -av --exclude="*.zip" --exclude="*.img" $REPO_DIR/* $rootfs_dir/root/SamplerBox
+cp -r -v $REPO_DIR/.git* $rootfs_dir/root/SamplerBox
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Copied new SamplerBox files"
@@ -193,7 +193,7 @@ else
     exit 1
 fi
 
-umount $root_dir
+umount $rootfs_dir
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Unmounted root dir"
