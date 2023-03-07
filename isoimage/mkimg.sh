@@ -19,6 +19,10 @@ NAME_OF_SCRIPT_DIR="$(basename $SCRIPT_DIR)"
 TMP_IMG_DIR="/tmp/samplerbox_mkimg"
 boot_dir="$TMP_IMG_DIR/boot"
 rootfs_dir="$TMP_IMG_DIR/rootfs"
+root_home_dir="$rootfs_dir/root"
+
+DEFAULT_SB_ROOT_PWD="root"
+DEFAULT_DOCKERPI_SSH_PORT=5022
 
 # Check if required tools are installed
 
@@ -39,6 +43,10 @@ fi
 
 if ! [ -x "$(command -v rsync)" ]; then
     echo mkimg: "Error: rsync is not installed." >&2
+    exit 1
+fi
+if ! [ -x "$(command -v sshpass)" ]; then
+    echo mkimg: "Error: sshpass is not installed." >&2
     exit 1
 fi
 
@@ -150,7 +158,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-cp -r $SCRIPT_DIR/root/root/* $rootfs_dir
+cp -r $SCRIPT_DIR/root/root/* $root_home_dir
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Copied root files"
@@ -161,9 +169,9 @@ fi
 
 echo "mkimg: Copying SamplerBox files..."
 
-if [ -d $rootfs_dir/root/SamplerBox ]; then
+if [ -d $root_home_dir/SamplerBox ]; then
     echo "mkimg: Removing old SamplerBox files"
-    rm -r $rootfs_dir/root/SamplerBox
+    rm -r $root_home_dir/SamplerBox
     if [ $? -eq 0 ]; then
         echo "mkimg: Removed old SamplerBox files"
     else
@@ -172,9 +180,9 @@ if [ -d $rootfs_dir/root/SamplerBox ]; then
     fi
 fi
 
-mkdir -p $rootfs_dir/root/SamplerBox
-rsync -av --exclude="*.zip" --exclude="*.img" $REPO_DIR/* $rootfs_dir/root/SamplerBox
-cp -r -v $REPO_DIR/.git* $rootfs_dir/root/SamplerBox
+mkdir -p $root_home_dir/SamplerBox
+rsync -av --exclude="*.zip" --exclude="*.img" $REPO_DIR/* $root_home_dir/SamplerBox
+cp -r -v $REPO_DIR/.git* $root_home_dir/SamplerBox
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Copied new SamplerBox files"
@@ -203,7 +211,7 @@ else
 fi
 
 # Remove mappings
-kpartx -d $TMP_IMG_DIR/*.img > /dev/null 2>&1
+kpartx -d $TMP_IMG_DIR/*.img
 
 # Move image to script dir
 
