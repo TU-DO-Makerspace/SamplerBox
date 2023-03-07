@@ -22,12 +22,25 @@ root_dir="$TMP_IMG_DIR/root"
 
 # Check if required tools are installed
 
-# if kpartx -h > /dev/null 2>&1; then
-#     echo "mkimg: kpartx is installed"
-# else
-#     echo "mkimg: kpartx is not installed"
-#     exit 1
-# fi
+if ! [ -x "$(command -v unzip)" ]; then
+    echo mkimg: "Error: unzip is not installed." >&2
+    exit 1
+fi
+
+if ! [ -x "$(command -v kpartx)" ]; then
+    echo mkimg: "Error: kpartx is not installed." >&2
+    exit 1
+fi
+
+if ! [ -x "$(command -v wget)" ]; then
+    echo mkimg: "Error: wget is not installed." >&2
+    exit 1
+fi
+
+if ! [ -x "$(command -v rsync)" ]; then
+    echo mkimg: "Error: rsync is not installed." >&2
+    exit 1
+fi
 
 cd $SCRIPT_DIR
 
