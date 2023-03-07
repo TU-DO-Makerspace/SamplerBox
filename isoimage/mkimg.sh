@@ -161,11 +161,23 @@ fi
 
 echo "mkimg: Copying SamplerBox files..."
 
+if [ -d $root_dir/root/SamplerBox ]; then
+    echo "mkimg: Removing old SamplerBox files"
+    rm -r $root_dir/root/SamplerBox
+    if [ $? -eq 0 ]; then
+        echo "mkimg: Removed old SamplerBox files"
+    else
+        echo "mkimg: Failed to remove old SamplerBox files"
+        exit 1
+    fi
+fi
+
 mkdir -p $root_dir/root/SamplerBox
-rsync -av --exclude="$NAME_OF_SCRIPT_DIR" $REPO_DIR/* $root_dir/root/SamplerBox
+rsync -av --exclude="*.zip" --exclude="*.img" $REPO_DIR/* $root_dir/root/SamplerBox
+cp -r -v $REPO_DIR/.git* $root_dir/root/SamplerBox
 
 if [ $? -eq 0 ]; then
-    echo "mkimg: Copied SamplerBox files"
+    echo "mkimg: Copied new SamplerBox files"
 else
     echo "mkimg: Failed to copy SamplerBox files"
     exit 1
