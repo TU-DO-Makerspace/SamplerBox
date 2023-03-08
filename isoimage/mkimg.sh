@@ -23,6 +23,7 @@ root_home_dir="$rootfs_dir/root"
 
 DEFAULT_SB_ROOT_PWD="root"
 DEFAULT_DOCKERPI_SSH_PORT=5022
+QEMU_BOOT_TIMEOUT=180
 
 # Check if required tools are installed
 
@@ -45,6 +46,12 @@ if ! [ -x "$(command -v rsync)" ]; then
     echo mkimg: "Error: rsync is not installed." >&2
     exit 1
 fi
+
+if ! [ -x "$(command -v docker)" ]; then
+    echo mkimg: "Error: docker is not installed." >&2
+    exit 1
+fi
+
 if ! [ -x "$(command -v sshpass)" ]; then
     echo mkimg: "Error: sshpass is not installed." >&2
     exit 1
@@ -78,8 +85,9 @@ fi
 if [ -d $TMP_IMG_DIR ]; then
     echo "mkimg: $TMP_IMG_DIR already exists"
     echo "mkimg: Removing $TMP_IMG_DIR"
-    umount $boot_dir || /bin/true
-    umount $rootfs_dir || /bin/true
+    umount $boot_dir > /dev/null 2>&1
+    umount $rootfs_dir > /dev/null 2>&1
+    kpartx -d *.img > /dev/null 2>&1
     rm -r $TMP_IMG_DIR
     if [ $? -eq 0 ]; then
         echo "mkimg: Removed $TMP_IMG_DIR"
@@ -213,10 +221,78 @@ fi
 # Remove mappings
 kpartx -d $TMP_IMG_DIR/*.img
 
+# Run image in qemu
+mv $TMP_IMG_DIR/*.img $TMP_IMG_DIR/filesystem.img
+
+docker run -p 5022:5022 -d -v $TMP_IMG_DIR:/sdcard lukechilds/dockerpi:vm
+QEMU_CONTAINER=$(docker ps -q -f ancestor=lukechilds/dockerpi:vm)
+
+if [ $? -eq 0 ]; then
+    echo "mkimg: Started QEMU container"
+else
+    echo "mkimg: Failed to start QEMU container"
+    exit 1
+fi
+
+# Wait for QEMU to start
+
+echo "mkimg: Waiting for QEMU to start, this could take while..."
+i=0
+while ! sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost exit > /dev/null 2>&1; do
+    sleep 1
+    i=$((i+1))
+    if [ $i -gt $QEMU_BOOT_TIMEOUT ]; then
+        echo "mkimg: Attempt to connect to QEMU timed out"
+        docker stop $QEMU_CONTAINER
+        exit 1
+    fi
+done
+
+echo "mkimg: QEMU started! Mounting rootfs as read-write..."
+sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
+    "mount -o remount,rw /"
+
+if [ $? -eq 0 ]; then
+    echo "mkimg: Mounted rootfs as read-write"
+else
+    echo "mkimg: Failed to mount rootfs as read-write"
+    docker stop $QEMU_CONTAINER
+    exit 1
+fi
+
+echo "mkimg: Building SamplerBox cpython modules..."
+sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
+    "cd /root/SamplerBox && python3 setup.py build_ext --inplace"
+
+if [ $? -eq 0 ]; then
+    echo "mkimg: Built SamplerBox cpython modules"
+else
+    echo "mkimg: Failed to build SamplerBox cpython modules"
+    docker stop $QEMU_CONTAINER
+    exit 1
+fi
+
+echo "mkimg: Reloading systemd and re-enabling SamplerBox service..."
+sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
+    "systemctl daemon-reload && systemctl reenable samplerbox.service"
+
+if [ $? -eq 0 ]; then
+    echo "mkimg: Reloaded systemd and re-enabled SamplerBox service"
+else
+    echo "mkimg: Failed to reload systemd and re-enable SamplerBox service"
+    docker stop $QEMU_CONTAINER
+    exit 1
+fi
+
+echo "mkimg: Stopping QEMU container..."
+sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost "poweroff"
+sleep 10
+docker stop $QEMU_CONTAINER
+
 # Move image to script dir
 
-chmod 777 *.img
-mv $TMP_IMG_DIR/*.img $SCRIPT_DIR/$OUTPUT.img
+chmod 777 $TMP_IMG_DIR/filesystem.img
+mv $TMP_IMG_DIR/filesystem.img $SCRIPT_DIR/$OUTPUT.img
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Done! The new image can be found at $SCRIPT_DIR/samplerbox.img"
