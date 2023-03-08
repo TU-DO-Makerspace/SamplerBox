@@ -449,8 +449,6 @@ if USE_SYSTEMLED:
 # but adding a 'sleep' call in the service file also does not seem to help. It's
 # possible that the unwanted data is perhaps being queued up?
 
-IGNORE_MIDI_AFTER_BOOT_FOR_SECONDS = 2 # Only applies when --boot is passed as argument
-
 tstamp_boot_completed = -1
 if len(sys.argv) > 1 and sys.argv[1] == '--boot':
     tstamp_boot_completed = time.time() + IGNORE_MIDI_AFTER_BOOT_FOR_SECONDS
