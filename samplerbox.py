@@ -18,6 +18,7 @@ import wave
 import time
 import numpy
 import os
+import sys
 import re
 import sounddevice
 import threading
@@ -439,14 +440,39 @@ if USE_SYSTEMLED:
 # MAIN LOOP
 #########################################
 
+# Check if the '--boot' flag was passed as an argument. If so, we discard MIDI
+# input the first few seconds.
+# 
+# Due to some unknown reason, when samplerbox is executed as a systemd service
+# after boot, it can sometimes read unwanted data from the MIDI device, causing
+# a random program change to be interpreted. I'm not entirely sure why this happens,
+# but adding a 'sleep' call in the service file also does not seem to help. It's
+# possible that the unwanted data is perhaps being queued up?
+
+IGNORE_MIDI_AFTER_BOOT_FOR_SECONDS = 2 # Only applies when --boot is passed as argument
+
+tstamp_boot_completed = -1
+if len(sys.argv) > 1 and sys.argv[1] == '--boot':
+    tstamp_boot_completed = time.time() + IGNORE_MIDI_AFTER_BOOT_FOR_SECONDS
+
 midi_in = [rtmidi.MidiIn(b'in')]
 previous = []
 while True:
     for port in midi_in[0].ports:
         if port not in previous and b'Midi Through' not in port:
             midi_in.append(rtmidi.MidiIn(b'in'))
-            midi_in[-1].callback = MidiCallback
             midi_in[-1].open_port(port)
             print('Opened MIDI: ' + str(port))
+
+            # Ignore all MiDi messages for first 2 seconds
+            now = time.time()
+
+            # Discard all messages until IGNORE_MIDI_AFTER_BOOT_FOR_SECONDS has passed
+            # if --boot was passed as argument
+            while time.time() < tstamp_boot_completed:
+                midi_in[-1].get_message()
+
+            midi_in[-1].callback = MidiCallback
+
     previous = midi_in[0].ports
     time.sleep(2)

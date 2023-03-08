@@ -3,7 +3,7 @@ Description=Starts SamplerBox
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 -u /root/SamplerBox/samplerbox.py
+ExecStart=/usr/bin/python3 -u /root/SamplerBox/samplerbox.py --boot
 WorkingDirectory=/root/SamplerBox/
 
 [Install]
