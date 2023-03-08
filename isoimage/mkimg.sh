@@ -260,6 +260,32 @@ else
     exit 1
 fi
 
+echo "mkimg: Downloading and/or upgrading necessary apt packages..."
+
+sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
+    "apt update && \
+     apt install -y git python3 python3-pip python3-smbus python3-numpy libportaudio2"
+
+if [ $? -eq 0 ]; then
+    echo "mkimg: Downloaded and/or upgraded apt packages"
+else
+    echo "mkimg: Failed to download and/or upgrade apt packages"
+    docker stop $QEMU_CONTAINER
+    exit 1
+fi
+
+echo "mkimg: Installing or upgrading SamplerBox python modules..."
+sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
+    "pip3 install --upgrade cython rtmidi-python cffi sounddevice pyserial inputexec"
+
+if [ $? -eq 0 ]; then
+    echo "mkimg: Installed or upgraded SamplerBox python modules"
+else
+    echo "mkimg: Failed to install or upgrade SamplerBox python modules"
+    docker stop $QEMU_CONTAINER
+    exit 1
+fi
+
 echo "mkimg: Building SamplerBox cpython modules..."
 sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
     "cd /root/SamplerBox && python3 setup.py build_ext --inplace"
@@ -274,7 +300,7 @@ fi
 
 echo "mkimg: Reloading systemd and re-enabling SamplerBox service..."
 sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
-    "systemctl daemon-reload && systemctl reenable samplerbox.service"
+    "systemctl daemon-reload && systemctl reenable samplerbox.service && systemctl reenable volume-control.service"
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Reloaded systemd and re-enabled SamplerBox service"
