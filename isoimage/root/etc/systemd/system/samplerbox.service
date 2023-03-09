@@ -1,5 +1,7 @@
 [Unit]
 Description=Starts SamplerBox
+After=usb-mount@.service
+Wants=volume-control.service
 
 [Service]
 Type=simple
