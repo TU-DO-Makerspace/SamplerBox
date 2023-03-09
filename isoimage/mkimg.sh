@@ -21,7 +21,7 @@ boot_dir="$TMP_IMG_DIR/boot"
 rootfs_dir="$TMP_IMG_DIR/rootfs"
 root_home_dir="$rootfs_dir/root"
 systemd_system_dir="$rootfs_dir/etc/systemd/system"
-systemd_service_files="$(find $systemd_service_dir -type f -name "*.service" | sed 's|./root||g' | sed 's/\n/ /g')"
+systemd_service_files="$(find $systemd_service_dir -type f -name "*.service" | sed 's|./root||g' | tr '\n' ' ')"
 
 DEFAULT_SB_ROOT_PWD="root"
 DEFAULT_DOCKERPI_SSH_PORT=5022
