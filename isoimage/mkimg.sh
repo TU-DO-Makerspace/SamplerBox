@@ -20,6 +20,8 @@ TMP_IMG_DIR="/tmp/samplerbox_mkimg"
 boot_dir="$TMP_IMG_DIR/boot"
 rootfs_dir="$TMP_IMG_DIR/rootfs"
 root_home_dir="$rootfs_dir/root"
+systemd_system_dir="$rootfs_dir/etc/systemd/system"
+systemd_service_files="$(find $systemd_service_dir -type f -name "*.service" | sed 's|./root||g' | sed 's/\n/ /g')"
 
 DEFAULT_SB_ROOT_PWD="root"
 DEFAULT_DOCKERPI_SSH_PORT=5022
@@ -263,8 +265,8 @@ fi
 echo "mkimg: Downloading and/or upgrading necessary apt packages..."
 
 sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
-    "apt update && \
-     apt install -y git python3 python3-pip python3-smbus python3-numpy libportaudio2"
+    "apt-get update && \
+     apt-get install -y git python3 python3-pip python3-smbus python3-numpy libportaudio2"
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Downloaded and/or upgraded apt packages"
@@ -299,8 +301,9 @@ else
 fi
 
 echo "mkimg: Reloading systemd and re-enabling SamplerBox service..."
+
 sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
-    "systemctl daemon-reload && systemctl reenable samplerbox.service && systemctl reenable volume-control.service"
+    "systemctl daemon-reload && systemctl reenable $systemd_service_files"
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Reloaded systemd and re-enabled SamplerBox service"
