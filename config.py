@@ -15,4 +15,6 @@ MAX_POLYPHONY = 80                      # This can be set higher, but 80 is a sa
 USE_BUTTONS = False                     # Set to True to use momentary buttons (connected to RaspberryPi's GPIO pins) to change preset
 USE_DOUBLE_7SEGMENT_DISPLAY = True      # Set to True to use a double 7-segment display (connected to RaspberryPi's GPIO pins)
 USE_SERIALPORT_MIDI = True              # Set to True to enable MIDI IN via SerialPort (e.g. RaspberryPi's GPIO UART pins)
+USE_MUTE_LED = True                     # Set to True to use a LED to indicate mute status (connected to RaspberryPi's GPIO pins)
+GPIO_MUTE_LED = 17                      # The GPIO pin to use for the mute LED
 USE_SYSTEMLED = True                    # Flashing LED after successful boot, only works on RPi/Linux
