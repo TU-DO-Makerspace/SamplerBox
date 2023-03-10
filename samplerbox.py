@@ -149,6 +149,57 @@ globalvolume = 10 ** (-12.0/20)  # -12dB default global volume
 globaltranspose = 0
 
 #########################################
+# 2x 7-SEGMENT DISPLAY
+#
+#########################################
+
+if USE_DOUBLE_7SEGMENT_DISPLAY:
+    import zerorpc
+
+    class Double7Segment(object):
+        def __init__(self):
+            self.init_success = False
+            self.display_client = zerorpc.Client()
+            self.display_client.connect("tcp://127.0.0.1:4242")
+            if self.display_client:
+                self.init_success = True
+            else:
+                print("WARNING: Could not connect to display server")
+
+
+        def display_n(self, n:int):
+            if not self.init_success:
+                return
+            self.display_client.set_layer1_n(n)
+
+        def display_2c(self, s:str):
+            if not self.init_success:
+                return
+            self.display_client.set_layer1_2c(s)
+
+        def display_n_temp(self, n:int, t:int):
+            if not self.init_success:
+                return
+            self.display_client.set_layer2_n(n, t)
+
+        def display_2c_temp(self, s:str, t:int):
+            if not self.init_success:
+                return
+            self.display_client.set_layer2_2c(s, t)
+
+else:
+    
+    class Double7Segment(object):
+        def __init__(self):
+            pass
+
+        def display_2c(self, s:str):
+            pass
+
+        def display_n(self, s:str):
+            pass
+
+#########################################
 # AUDIO AND MIDI CALLBACKS
 #
 #########################################
@@ -236,16 +287,18 @@ def ActuallyLoad():
     samples = {}
     globalvolume = 10 ** (-12.0/20)  # -12dB default global volume
     globaltranspose = 0
+    double_7seg = Double7Segment()
     samplesdir = SAMPLES_DIR if os.listdir(SAMPLES_DIR) else '.'      # use current folder (containing 0 Saw) if no user media containing samples has been found
     basename = next((f for f in os.listdir(samplesdir) if f.startswith("%d " % preset)), None)      # or next(glob.iglob("blah*"), None)
     if basename:
         dirname = os.path.join(samplesdir, basename)
     if not basename:
         print('Preset empty: %s' % preset)
-        display("E%03d" % preset)
+        double_7seg.display_2c_temp("EP", 1)
+        double_7seg.display_n(preset)
         return
     print('Preset loading: %s (%s)' % (preset, basename))
-    display("L%03d" % preset)
+    double_7seg.display_2c("LO")
     definitionfname = os.path.join(dirname, "definition.txt")
     if os.path.isfile(definitionfname):
         with open(definitionfname, 'r') as definitionfile:
@@ -304,10 +357,10 @@ def ActuallyLoad():
                     pass
     if len(initial_keys) > 0:
         print('Preset loaded: ' + str(preset))
-        display("%04d" % preset)
     else:
         print('Preset empty: ' + str(preset))
-        display("E%03d" % preset)
+        double_7seg.display_2c_temp("EP", 1)
+    double_7seg.display_n(preset)
 
 #########################################
 # OPEN AUDIO DEVICE
@@ -353,30 +406,6 @@ if USE_BUTTONS:
     ButtonsThread = threading.Thread(target=Buttons)
     ButtonsThread.daemon = True
     ButtonsThread.start()
-
-#########################################
-# 7-SEGMENT DISPLAY
-#
-#########################################
-
-if USE_I2C_7SEGMENTDISPLAY:  # requires: 1) i2c-dev in /etc/modules and 2) dtparam=i2c_arm=on in /boot/config.txt
-    import smbus
-    bus = smbus.SMBus(1)     # using I2C
-    def display(s):
-        for k in '\x76\x79\x00' + s:     # position cursor at 0
-            try:
-                bus.write_byte(0x71, ord(k))
-            except:
-                try:
-                    bus.write_byte(0x71, ord(k))
-                except:
-                    pass
-            time.sleep(0.002)
-    display('----')
-    time.sleep(0.5)
-else:
-    def display(s):
-        pass
 
 #########################################
 # MIDI IN via SERIAL PORT
