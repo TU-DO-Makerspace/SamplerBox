@@ -21,7 +21,7 @@ boot_dir="$TMP_IMG_DIR/boot"
 rootfs_dir="$TMP_IMG_DIR/rootfs"
 root_home_dir="$rootfs_dir/root"
 systemd_system_dir="$rootfs_dir/etc/systemd/system"
-systemd_service_files="$(find $systemd_service_dir -type f -name "*.service" | sed 's|./root||g' | tr '\n' ' ')"
+systemd_service_files="$(cd $SCRIPT_DIR/root && find -type f -name "*.service" | sed 's|^\.||g' | tr '\n' ' ')"
 
 DEFAULT_SB_ROOT_PWD="root"
 DEFAULT_DOCKERPI_SSH_PORT=5022
@@ -151,7 +151,7 @@ fi
 # Do stuff with the image
 
 echo "mkimg: Copying boot files..."
-cp -v -r $SCRIPT_DIR/root/boot/* $boot_dir
+cp -v -r $SCRIPT_DIR/root/boot/. $boot_dir
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Copied boot files"
@@ -161,14 +161,14 @@ else
 fi
 
 echo "mkimg: Copying root files..."
-cp -v -r $SCRIPT_DIR/root/etc/* $rootfs_dir/etc
+cp -v -r $SCRIPT_DIR/root/etc/. $rootfs_dir/etc/
 
 if [ $? -ne 0 ]; then
     echo "mkimg: Failed to copy root files"
     exit 1
 fi
 
-cp -r $SCRIPT_DIR/root/root/* $root_home_dir
+cp -r $SCRIPT_DIR/root/root/. $root_home_dir/
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Copied root files"
@@ -191,8 +191,7 @@ if [ -d $root_home_dir/SamplerBox ]; then
 fi
 
 mkdir -p $root_home_dir/SamplerBox
-rsync -av --exclude="*.zip" --exclude="*.img" $REPO_DIR/* $root_home_dir/SamplerBox
-cp -r -v $REPO_DIR/.git* $root_home_dir/SamplerBox
+rsync -vaC --exclude="*.zip" --exclude="*.img" $REPO_DIR/* $root_home_dir/SamplerBox
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Copied new SamplerBox files"
@@ -266,7 +265,7 @@ echo "mkimg: Downloading and/or upgrading necessary apt packages..."
 
 sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
     "apt-get update && \
-     apt-get install -y git python3 python3-pip python3-smbus python3-numpy python3-gpiozero libportaudio2"
+     apt-get install -y git python3 python3-pip python3-smbus python3-numpy python3-gpiozero python3-evdev libportaudio2"
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Downloaded and/or upgraded apt packages"
@@ -278,7 +277,7 @@ fi
 
 echo "mkimg: Installing or upgrading SamplerBox python modules..."
 sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
-    "pip3 install --upgrade cython rtmidi-python cffi sounddevice pyserial inputexec zerorpc"
+    "pip3 install --upgrade cython rtmidi-python cffi sounddevice pyserial zerorpc"
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Installed or upgraded SamplerBox python modules"

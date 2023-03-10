@@ -1,7 +1,7 @@
 [Unit]
 Description=Starts SamplerBox
-After=usb-mount@.service display-server.service
-Wants=volume-control.service
+After=usb-mount@.service
+Wants=volume-control.service display-server.service
 
 [Service]
 Type=simple

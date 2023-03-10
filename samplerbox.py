@@ -160,8 +160,8 @@ if USE_DOUBLE_7SEGMENT_DISPLAY:
         def __init__(self):
             self.init_success = False
             self.display_client = zerorpc.Client()
-            self.display_client.connect("tcp://127.0.0.1:4242")
-            if self.display_client:
+            ret = self.display_client.connect("tcp://127.0.0.1:4242")
+            if len(ret) > 0:
                 self.init_success = True
             else:
                 print("WARNING: Could not connect to display server")
