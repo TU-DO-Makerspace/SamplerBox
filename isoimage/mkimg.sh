@@ -266,7 +266,7 @@ echo "mkimg: Downloading and/or upgrading necessary apt packages..."
 
 sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
     "apt-get update && \
-     apt-get install -y git python3 python3-pip python3-smbus python3-numpy libportaudio2"
+     apt-get install -y git python3 python3-pip python3-smbus python3-numpy python3-gpiozero libportaudio2"
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Downloaded and/or upgraded apt packages"
@@ -278,7 +278,7 @@ fi
 
 echo "mkimg: Installing or upgrading SamplerBox python modules..."
 sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost \
-    "pip3 install --upgrade cython rtmidi-python cffi sounddevice pyserial inputexec"
+    "pip3 install --upgrade cython rtmidi-python cffi sounddevice pyserial inputexec zerorpc"
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Installed or upgraded SamplerBox python modules"

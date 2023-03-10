@@ -1,6 +1,6 @@
 [Unit]
 Description=+/-/MUTE volume control for devices with HID volume buttons (ex. PCM2704)
-After=triggerhappy.service
+After=triggerhappy.service display-server.service
 StartLimitIntervalSec=10
 StartLimitBurst=5
 

@@ -1,0 +1,11 @@
+[Unit]
+Description=Display Server for double 7 Segment Display
+After=network-online.target
+
+[Service]
+WorkingDirectory=/root/SamplerBox/
+ExecStart=/usr/bin/python3 -u /root/SamplerBox/display_server.py
+Restart=always
+
+[Install]
+RequiredBy=basic.target
