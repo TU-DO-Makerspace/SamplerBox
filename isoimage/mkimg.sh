@@ -27,6 +27,57 @@ DEFAULT_SB_ROOT_PWD="root"
 DEFAULT_DOCKERPI_SSH_PORT=5022
 QEMU_BOOT_TIMEOUT=180
 
+function help {
+    echo "Usage: mkimg.sh [OPTION]"
+    echo "Create a Raspberry Pi image with SamplerBox"
+    echo ""
+    echo "Options:"
+    echo "  --help, -h"
+    echo "      Show this help message"
+    echo "  --install-ubuntu-deps"
+    echo "      Install dependencies for Ubuntu"
+    echo ""
+    echo "Examples:"
+    echo "  mkimg.sh"
+    echo "      Create a Raspberry Pi image with SamplerBox"
+    echo "  mkimg.sh --install-ubuntu-deps"
+    echo "      Install dependencies for Ubuntu"
+}
+
+## Check if --install-ubuntu-deps was passed
+
+if [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
+    help
+    exit 0
+elif [ "$1" == "--install-ubuntu-deps" ]; then
+    echo "mkimg: Installing dependencies for Ubuntu"
+    apt-get update
+
+    if ! [ -x "$(command -v docker)" ]; then
+        echo "mkimg: Docker is not installed, adding official docker repository..."
+        echo "mkimg: Installing docker..."
+        apt-get install apt-transport-https ca-certificates curl software-properties-common
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        apt-get update
+    fi
+
+    echo "mkimg: Installing apt dependencies..."
+    apt-get install -y unzip kpartx wget rsync sshpass docker-ce
+
+    if [ $? -ne 0 ]; then
+        echo "mkimg: Failed to install dependencies"
+        exit 1
+    fi
+
+    echo "mkimg: Installed dependencies"
+    exit 0
+elif [ ! -z "$1" ]; then
+    echo "mkimg: Unknown argument: $1"
+    help
+    exit 1
+fi
+
 # Check if required tools are installed
 
 if ! [ -x "$(command -v unzip)" ]; then
