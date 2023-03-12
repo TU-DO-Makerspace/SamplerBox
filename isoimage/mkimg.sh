@@ -44,6 +44,42 @@ function help {
     echo "      Install dependencies for Ubuntu"
 }
 
+function cleanup {
+    _ret=true
+
+    echo "mkimg: Cleaning up..."
+    if [ -d $TMP_IMG_DIR ]; then
+        umount $boot_dir > /dev/null 2>&1
+        umount $rootfs_dir > /dev/null 2>&1
+        kpartx -d *.img > /dev/null 2>&1
+        rm -rf $TMP_IMG_DIR
+
+        if [ $? -ne 0 ]; then
+            echo "mkimg: Failed to remove $TMP_IMG_DIR"
+            _ret=false
+        fi
+    fi
+
+    if [ -f $OUTPUT.img ]; then
+        rm $OUTPUT.img
+        if [ $? -ne 0 ]; then
+            echo "mkimg: Failed to remove $OUTPUT.img"
+            _ret=false
+        fi
+    fi
+
+    if [ _ret ]; then
+        echo "mkimg: Cleaned up"
+    else
+        echo "mkimg: Failed to clean up"
+    fi
+}
+
+function cleanup_and_exit {
+    cleanup
+    exit $1
+}
+
 ## Check if --install-ubuntu-deps was passed
 
 if [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
@@ -124,33 +160,9 @@ else
     chmod 777 $RELEASE_FILE_NAME
 fi
 
-if [ -f $OUTPUT.img ]; then
-    echo "mkimg: Removing old $OUTPUT.img"
-    rm $OUTPUT.img
-    if [ $? -eq 0 ]; then
-        echo "mkimg: Removed old $OUTPUT.img"
-    else
-        echo "mkimg: Failed to remove old $OUTPUT.img"
-        exit 1
-    fi
-fi
+cleanup
 
-if [ -d $TMP_IMG_DIR ]; then
-    echo "mkimg: $TMP_IMG_DIR already exists"
-    echo "mkimg: Removing $TMP_IMG_DIR"
-    umount $boot_dir > /dev/null 2>&1
-    umount $rootfs_dir > /dev/null 2>&1
-    kpartx -d *.img > /dev/null 2>&1
-    rm -r $TMP_IMG_DIR
-    if [ $? -eq 0 ]; then
-        echo "mkimg: Removed $TMP_IMG_DIR"
-    else
-        echo "mkimg: Failed to remove $TMP_IMG_DIR"
-        exit 1
-    fi
-fi
-
-echo "mkimg: Unzipping $RELEASE_FILE_NAME to $TMP_IMG_DIR"
+echo "mkimg: Unzipping $RELEASE_FILE_NAME to $TMP_IMG_DIR..."
 
 # Unzip file and cd into directory
 unzip -o $RELEASE_FILE_NAME -d $TMP_IMG_DIR
@@ -158,7 +170,7 @@ if [ $? -eq 0 ]; then
     echo "mkimg: Unzipped $RELEASE_FILE_NAME"
 else
     echo "mkimg: Failed to unzip $RELEASE_FILE_NAME"
-    exit 1
+    cleanup_and_exit 1
 fi
 
 cd $TMP_IMG_DIR
@@ -168,16 +180,18 @@ loop_dev="$(kpartx -l *.img | grep -oP 'loop[0-9]+p[0-9]+')"
 loop_dev=($loop_dev)
 
 # Create mappings for image
-kpartx -av *.img > /dev/null 2>&1
+echo "mkimg: Creating /dev/loop mappings for image..."
+kpartx -av *.img > /dev/null
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Mappings created"
 else
     echo "mkimg: Failed to create mappings"
-    exit 1
+    cleanup_and_exit 1
 fi
 
 # Mount image
+echo "mkimg: Mounting image..."
 mkdir -p $boot_dir
 mkdir -p $rootfs_dir
 
@@ -187,7 +201,7 @@ if [ $? -eq 0 ]; then
     echo "mkimg: Mounted boot partition: $boot_dir"
 else
     echo "mkimg: Failed to mount boot partition"
-    exit 1
+    cleanup_and_exit 1
 fi
 
 mount -o loop /dev/mapper/${loop_dev[1]} $rootfs_dir
@@ -196,7 +210,7 @@ if [ $? -eq 0 ]; then
     echo "mkimg: Mounted root partition: $rootfs_dir"
 else
     echo "mkimg: Failed to mount root partition"
-    exit 1
+    cleanup_and_exit 1
 fi
 
 # Do stuff with the image
@@ -208,7 +222,7 @@ if [ $? -eq 0 ]; then
     echo "mkimg: Copied boot files"
 else
     echo "mkimg: Failed to copy boot files"
-    exit 1
+    cleanup_and_exit 1
 fi
 
 echo "mkimg: Copying root files..."
@@ -216,7 +230,7 @@ cp -v -r $SCRIPT_DIR/root/etc/. $rootfs_dir/etc/
 
 if [ $? -ne 0 ]; then
     echo "mkimg: Failed to copy root files"
-    exit 1
+    cleanup_and_exit 1
 fi
 
 cp -r $SCRIPT_DIR/root/root/. $root_home_dir/
@@ -225,7 +239,7 @@ if [ $? -eq 0 ]; then
     echo "mkimg: Copied root files"
 else
     echo "mkimg: Failed to copy root files"
-    exit 1
+    cleanup_and_exit 1
 fi
 
 echo "mkimg: Copying SamplerBox files..."
@@ -237,7 +251,7 @@ if [ -d $root_home_dir/SamplerBox ]; then
         echo "mkimg: Removed old SamplerBox files"
     else
         echo "mkimg: Failed to remove old SamplerBox files"
-        exit 1
+        cleanup_and_exit 1
     fi
 fi
 
@@ -248,17 +262,18 @@ if [ $? -eq 0 ]; then
     echo "mkimg: Copied new SamplerBox files"
 else
     echo "mkimg: Failed to copy SamplerBox files"
-    exit 1
+    cleanup_and_exit 1
 fi
 
 # Unmount image
+echo "mkimg: Unmounting image..."
 umount $boot_dir
 
 if [ $? -eq 0 ]; then
     echo "mkimg: Unmounted boot dir"
 else
     echo "mkimg: Failed to unmount boot dir"
-    exit 1
+    cleanup_and_exit 1
 fi
 
 umount $rootfs_dir
@@ -267,13 +282,21 @@ if [ $? -eq 0 ]; then
     echo "mkimg: Unmounted root dir"
 else
     echo "mkimg: Failed to unmount root dir"
-    exit 1
+    cleanup_and_exit 1
 fi
 
 # Remove mappings
+echo "mkimg: Removing /dev/loop mappings..."
 kpartx -d $TMP_IMG_DIR/*.img
+if [ $? -eq 0 ]; then
+    echo "mkimg: Mappings removed"
+else
+    echo "mkimg: Failed to remove mappings"
+    cleanup_and_exit 1
+fi
 
 # Run image in qemu
+echo "mkimg: Starting QEMU container..."
 mv $TMP_IMG_DIR/*.img $TMP_IMG_DIR/filesystem.img
 
 docker run -p 5022:5022 -d -v $TMP_IMG_DIR:/sdcard lukechilds/dockerpi:vm
@@ -283,12 +306,12 @@ if [ $? -eq 0 ]; then
     echo "mkimg: Started QEMU container"
 else
     echo "mkimg: Failed to start QEMU container"
-    exit 1
+    cleanup_and_exit 1
 fi
 
 # Wait for QEMU to start
 
-echo "mkimg: Waiting for QEMU to start, this could take while..."
+echo "mkimg: Waiting for the QEMU RPi VM to boot, this could take while..."
 i=0
 while ! sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DEFAULT_DOCKERPI_SSH_PORT root@localhost exit > /dev/null 2>&1; do
     sleep 1
@@ -296,7 +319,7 @@ while ! sshpass -p "$DEFAULT_SB_ROOT_PWD" ssh -o StrictHostKeyChecking=no -p $DE
     if [ $i -gt $QEMU_BOOT_TIMEOUT ]; then
         echo "mkimg: Attempt to connect to QEMU timed out"
         docker stop $QEMU_CONTAINER
-        exit 1
+        cleanup_and_exit 1
     fi
 done
 
@@ -309,7 +332,7 @@ if [ $? -eq 0 ]; then
 else
     echo "mkimg: Failed to mount rootfs as read-write"
     docker stop $QEMU_CONTAINER
-    exit 1
+    cleanup_and_exit 1
 fi
 
 echo "mkimg: Downloading and/or upgrading necessary apt packages..."
@@ -323,7 +346,7 @@ if [ $? -eq 0 ]; then
 else
     echo "mkimg: Failed to download and/or upgrade apt packages"
     docker stop $QEMU_CONTAINER
-    exit 1
+    cleanup_and_exit 1
 fi
 
 echo "mkimg: Installing or upgrading SamplerBox python modules..."
@@ -335,7 +358,7 @@ if [ $? -eq 0 ]; then
 else
     echo "mkimg: Failed to install or upgrade SamplerBox python modules"
     docker stop $QEMU_CONTAINER
-    exit 1
+    cleanup_and_exit 1
 fi
 
 echo "mkimg: Building SamplerBox cpython modules..."
@@ -347,7 +370,7 @@ if [ $? -eq 0 ]; then
 else
     echo "mkimg: Failed to build SamplerBox cpython modules"
     docker stop $QEMU_CONTAINER
-    exit 1
+    cleanup_and_exit 1
 fi
 
 echo "mkimg: Reloading systemd and re-enabling SamplerBox service..."
@@ -360,7 +383,7 @@ if [ $? -eq 0 ]; then
 else
     echo "mkimg: Failed to reload systemd and re-enable SamplerBox service"
     docker stop $QEMU_CONTAINER
-    exit 1
+    cleanup_and_exit 1
 fi
 
 echo "mkimg: Stopping QEMU container..."
@@ -377,8 +400,7 @@ if [ $? -eq 0 ]; then
     echo "mkimg: Done! The new image can be found at $SCRIPT_DIR/samplerbox.img"
 else
     echo "mkimg: Failed to move image to $SCRIPT_DIR"
-    exit 1
+    cleanup_and_exit 1
 fi
 
-# Remove temp dir
-rm -r $TMP_IMG_DIR
+cleanup_and_exit 0
