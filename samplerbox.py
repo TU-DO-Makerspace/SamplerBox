@@ -425,26 +425,44 @@ if USE_SERIALPORT_MIDI:
     #       Providing a baudrate of 31250 does not work, as the Pi serial driver does not officially support this
     #       baudrate. Attempting to do so will deliver some jankey data when attempting to read MIDI messages over
     #       the serial port.
-    #
-    #       Also very epic: This hack apparently only works with older Raspbian kernels (3.18.x seems safe, from around
-    #       4.x.x it breaks). The iso image provided in this project thus comes with an older kernel that supports this
-    #       hack.
 
-    def MidiSerialCallback():
+    # Constants for MIDI messages
+    MIDI_MSG_N_BYTES = 3        # Number of bytes in a MIDI message
+    I_MIDI_MSG_STATUS_BYTE = 0  # Index of the status byte in a MIDI message
+    I_MIDI_MSG_DATA_BYTE_1 = 1  # Index of the first data byte in a MIDI message
+    I_MIDI_MSG_DATA_BYTE_2 = 2  # Index of the second data byte in a MIDI message
+    MIDI_MSG_PORG_CHANGE = 12   # Status byte value for program change messages
+
+    def MidiSerialReader():
         message = [0, 0, 0]
+        
         while True:
             i = 0
-            while i < 3:
+            while i < MIDI_MSG_N_BYTES:
                 data = ord(ser.read(1))  # read a byte
-                if data >> 7 != 0:
-                    i = 0      # status byte!   this is the beginning of a midi message: http://www.midi.org/techspecs/midimessages.php
+                
+                # Check for beginning of a MIDI message
+                is_status = data >> 7 != 0
+                if is_status:
+                    i = I_MIDI_MSG_STATUS_BYTE
+                
                 message[i] = data
+                
+                # Check for program change message
+                # If detected, ignore the second data byte as
+                # it is not required for program change messages
+                prog_change_detected = (i == I_MIDI_MSG_DATA_BYTE_1 and 
+                                        message[I_MIDI_MSG_STATUS_BYTE] >> 4 == MIDI_MSG_PORG_CHANGE)
+                
+                if prog_change_detected:
+                    message[I_MIDI_MSG_DATA_BYTE_2] = 0
+                    break
+
                 i += 1
-                if i == 2 and message[0] >> 4 == 12:  # program change: don't wait for a third byte: it has only 2 bytes
-                    message[2] = 0
-                    i = 3
+                    
             MidiCallback(message, None)
-    MidiThread = threading.Thread(target=MidiSerialCallback)
+    
+    MidiThread = threading.Thread(target=MidiSerialReader)
     MidiThread.daemon = True
     MidiThread.start()
 
