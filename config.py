@@ -12,7 +12,10 @@ SAMPLES_DIR = "/media/"                 # The root directory containing the samp
 					
 IGNORE_MIDI_AFTER_BOOT_FOR_SECONDS = 2  # Discard MIDI messages for provided seconds after boot to work-around garbage MIDI messages on boot
 MAX_POLYPHONY = 80                      # This can be set higher, but 80 is a safe value
+MAX_PRESETS = 99                        # The maximum number of presets to load (99 as the 7-segment display only has 2 digits)
 USE_BUTTONS = False                     # Set to True to use momentary buttons (connected to RaspberryPi's GPIO pins) to change preset
+BUTTON_PREV = 18                        # The GPIO pin to use for the previous preset button
+BUTTON_NEXT = 17                        # The GPIO pin to use for the next preset button
 USE_DOUBLE_7SEGMENT_DISPLAY = True      # Set to True to use a double 7-segment display (connected to RaspberryPi's GPIO pins)
 USE_SERIALPORT_MIDI = True              # Set to True to enable MIDI IN via SerialPort (e.g. RaspberryPi's GPIO UART pins)
 USE_MUTE_LED = True                     # Set to True to use a LED to indicate mute status (connected to RaspberryPi's GPIO pins)

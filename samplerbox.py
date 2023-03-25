@@ -382,28 +382,45 @@ except:
 
 if USE_BUTTONS:
     import RPi.GPIO as GPIO
-    lastbuttontime = 0
-    def Buttons():
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.setup(17, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        global preset, lastbuttontime
+    DEBOUNCE_TIME = 0.2  # seconds
+
+    def IncPreset():
+        global preset
+        preset += 1
+        if preset > MAX_PRESETS:
+            preset = 0
+        LoadSamples()
+
+    def DecPreset():
+        global preset
+        preset -= 1
+        if preset < 0:
+            preset = MAX_PRESETS
+        LoadSamples()
+
+    # Handle button presses.
+    def HandleButtons():
+        last_button_time = 0
         while True:
             now = time.time()
-            if not GPIO.input(18) and (now - lastbuttontime) > 0.2:
-                lastbuttontime = now
-                preset -= 1
-                if preset < 0:
-                    preset = 127
-                LoadSamples()
-            elif not GPIO.input(17) and (now - lastbuttontime) > 0.2:
-                lastbuttontime = now
-                preset += 1
-                if preset > 127:
-                    preset = 0
-                LoadSamples()
-            time.sleep(0.020)
-    ButtonsThread = threading.Thread(target=Buttons)
+
+            currently_debouncing = (now - last_button_time) < DEBOUNCE_TIME
+
+            if not currently_debouncing:
+                if not GPIO.input(BUTTON_PREV):
+                    last_button_time = now
+                    DecPreset()
+                elif not GPIO.input(BUTTON_NEXT):
+                    last_button_time = now
+                    IncPreset()
+            
+            time.sleep(0.02)
+
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(BUTTON_PREV, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(BUTTON_NEXT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+    ButtonsThread = threading.Thread(target=HandleButtons)
     ButtonsThread.daemon = True
     ButtonsThread.start()
 
