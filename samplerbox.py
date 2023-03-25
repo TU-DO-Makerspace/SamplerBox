@@ -469,6 +469,10 @@ if USE_SYSTEMLED:
 # MAIN LOOP
 #########################################
 
+midi_in_scanner = rtmidi.MidiIn(b'in')  # Continuously scans for new MIDI devices
+midi_in_listeners = []                  # List of MIDI input listeners
+evaluated_ports = []                    # List of ports that have already been evaluated
+
 # Check if the '--boot' flag was passed as an argument. If so, we discard MIDI
 # input the first few seconds.
 # 
@@ -478,28 +482,38 @@ if USE_SYSTEMLED:
 # but adding a 'sleep' call in the service file also does not seem to help. It's
 # possible that the unwanted data is perhaps being queued up?
 
-tstamp_boot_completed = -1
 if len(sys.argv) > 1 and sys.argv[1] == '--boot':
-    tstamp_boot_completed = time.time() + IGNORE_MIDI_AFTER_BOOT_FOR_SECONDS
+    ignore_midi_for_seconds = IGNORE_MIDI_AFTER_BOOT_FOR_SECONDS
+else:
+    ignore_midi_for_seconds = 0
 
-midi_in = [rtmidi.MidiIn(b'in')]
-previous = []
+# Main loop
+# ---------
+# This loop continuously scans for new MIDI devices 
+# and opens them as they are detected.
+# It also ensures that the program runs indefinitely
+# and doesn't terminate
+#
 while True:
-    for port in midi_in[0].ports:
-        if port not in previous and b'Midi Through' not in port:
-            midi_in.append(rtmidi.MidiIn(b'in'))
-            midi_in[-1].open_port(port)
-            print('Opened MIDI: ' + str(port))
+    current_ports = midi_in_scanner.ports
+    new_ports = set(current_ports) - set(evaluated_ports) # List of new
 
-            # Ignore all MiDi messages for first 2 seconds
+    # Iterate over the new ports and open each one
+    for port in new_ports:
+
+        # Ignore the 'Midi Through' port, as it's a virtual port that is created
+        if b'Midi Through' not in port:
+            midi_in = rtmidi.MidiIn(b'in')
+            midi_in.open_port(port)
+
+            # Ignore MIDI input for a few seconds after boot
             now = time.time()
-
-            # Discard all messages until IGNORE_MIDI_AFTER_BOOT_FOR_SECONDS has passed
-            # if --boot was passed as argument
-            while time.time() < tstamp_boot_completed:
+            while time.time() < now + ignore_midi_for_seconds:
                 midi_in[-1].get_message()
 
-            midi_in[-1].callback = MidiCallback
+            midi_in.callback = MidiCallback     # Callback for incoming MIDI messages
+            midi_in_listeners.append(midi_in)   # Add to list of MIDI input listeners
+            print('Opened MIDI: ' + str(port))
 
-    previous = midi_in[0].ports
+    evaluated_ports = current_ports # Update list of evaluated ports
     time.sleep(2)
