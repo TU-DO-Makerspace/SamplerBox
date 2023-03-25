@@ -167,22 +167,30 @@ if USE_DOUBLE_7SEGMENT_DISPLAY:
                 print("WARNING: Could not connect to display server")
 
 
-        def display_n(self, n:int):
+        # Permanently display a number on the 7-segment display
+        def displayNumber(self, n:int):
             if not self.init_success:
                 return
             self.display_client.set_layer1_n(n)
 
-        def display_2c(self, s:str):
+        # Permanently display 2 characters on the 7-segment display
+        def display2Chars(self, s:str):
             if not self.init_success:
                 return
             self.display_client.set_layer1_2c(s)
 
-        def display_n_temp(self, n:int, t:int):
+        # Display a number for a given time on the 7-segment display
+        # After the time has passed, the previous permanent display 
+        # is restored
+        def displayNumberTemporary(self, n:int, t:int):
             if not self.init_success:
                 return
             self.display_client.set_layer2_n(n, t)
 
-        def display_2c_temp(self, s:str, t:int):
+        # Display 2 characters for a given time on the 7-segment display
+        # After the time has passed, the previous permanent display
+        # is restored
+        def display2CharsTemporary(self, s:str, t:int):
             if not self.init_success:
                 return
             self.display_client.set_layer2_2c(s, t)
@@ -193,10 +201,10 @@ else:
         def __init__(self):
             pass
 
-        def display_2c(self, s:str):
+        def display2Chars(self, s:str):
             pass
 
-        def display_n(self, s:str):
+        def displayNumber(self, s:str):
             pass
 
 #########################################
@@ -294,11 +302,11 @@ def ActuallyLoad():
         dirname = os.path.join(samplesdir, basename)
     if not basename:
         print('Preset empty: %s' % preset)
-        double_7seg.display_2c_temp("EP", 1)
-        double_7seg.display_n(preset)
+        double_7seg.display2CharsTemporary("EP", 1)
+        double_7seg.displayNumber(preset)
         return
     print('Preset loading: %s (%s)' % (preset, basename))
-    double_7seg.display_2c("LO")
+    double_7seg.display2Chars("LO")
     definitionfname = os.path.join(dirname, "definition.txt")
     if os.path.isfile(definitionfname):
         with open(definitionfname, 'r') as definitionfile:
@@ -359,8 +367,8 @@ def ActuallyLoad():
         print('Preset loaded: ' + str(preset))
     else:
         print('Preset empty: ' + str(preset))
-        double_7seg.display_2c_temp("EP", 1)
-    double_7seg.display_n(preset)
+        double_7seg.display2CharsTemporary("EP", 1)
+    double_7seg.displayNumber(preset)
 
 #########################################
 # OPEN AUDIO DEVICE
