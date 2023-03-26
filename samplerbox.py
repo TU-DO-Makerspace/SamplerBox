@@ -207,6 +207,12 @@ else:
         def displayNumber(self, s:str):
             pass
 
+        def display2CharsTemporary(self, s:str, t:int):
+            pass
+
+        def displayNumberTemporary(self, s:str, t:int):
+            pass
+
 #########################################
 # AUDIO AND MIDI CALLBACKS
 #
@@ -287,68 +293,162 @@ def LoadSamples():
 NOTES = ["c", "c#", "d", "d#", "e", "f", "f#", "g", "g#", "a", "a#", "b"]
 
 def ActuallyLoad():
+    
     global preset
     global samples
     global playingsounds
     global globalvolume, globaltranspose
-    playingsounds = []
-    samples = {}
+
+    playingsounds = []               # stop all sounds
+    samples = {}                     # clear samples
     globalvolume = 10 ** (-12.0/20)  # -12dB default global volume
-    globaltranspose = 0
-    double_7seg = Double7Segment()
-    samplesdir = SAMPLES_DIR if os.listdir(SAMPLES_DIR) else '.'      # use current folder (containing 0 Saw) if no user media containing samples has been found
-    basename = next((f for f in os.listdir(samplesdir) if f.startswith("%d " % preset)), None)      # or next(glob.iglob("blah*"), None)
+    globaltranspose = 0              # no transpose by default
+    double_7seg = Double7Segment()   # init 7-segment display
+
+    # Find directory containing samples for the current preset
+    # The directory name must start with the preset number followed by a space
+    # Ex: 0 saw, 1 piano, 2 drums, etc.
+    samplesdir = SAMPLES_DIR if os.listdir(SAMPLES_DIR) else '.'                                    # use current folder (containing 0 Saw) if no user media containing samples has been found
+    basename = next((f for f in os.listdir(samplesdir) if f.startswith("%d " % preset)), None)      # find directory starting with preset number followed by a space
+    
+    # Report no directory could be found for the current preset
     if basename:
-        dirname = os.path.join(samplesdir, basename)
-    if not basename:
+        presetpath = os.path.join(samplesdir, basename)
+    else:
         print('Preset empty: %s' % preset)
         double_7seg.display2CharsTemporary("EP", 1)
         double_7seg.displayNumber(preset)
         return
+   
     print('Preset loading: %s (%s)' % (preset, basename))
     double_7seg.display2Chars("LO")
-    definitionfname = os.path.join(dirname, "definition.txt")
-    if os.path.isfile(definitionfname):
-        with open(definitionfname, 'r') as definitionfile:
+    definitionfile = os.path.join(presetpath, "definition.txt")
+    
+    # Load and parse the definition.txt file
+    if os.path.isfile(definitionfile):
+        with open(definitionfile, 'r') as definitionfile:
             for i, pattern in enumerate(definitionfile):
                 try:
-                    if r'%%volume' in pattern:        # %%paramaters are global parameters
-                        globalvolume *= 10 ** (float(pattern.split('=')[1].strip()) / 20)
+                    # Parse parameters starting with "%%"
+                    # These are treated as global parameters
+                    #
+                    # Possible parameters:
+                    #   volume: global volume in dB
+                    #   transpose: global transpose in semitones
+                    #
+                    # Example: %%volume=-12
+                    if r'%%volume' in pattern:
+                        globalvolume *= 10 ** (float(pattern.split('=')[1].strip()) / 20) # convert dB to linear
                         continue
                     if r'%%transpose' in pattern:
                         globaltranspose = int(pattern.split('=')[1].strip())
                         continue
-                    defaultparams = {'midinote': '0', 'velocity': '127', 'notename': ''}
+
+                    # Evaluate sample specific patterns
+                    #
+                    # The syntax for a sample specific pattern is:
+                    #  <filepattern>, %<parameter1>=<value1>, %<parameter2>=<value2>, ...
+                    # 
+                    # If a parameter is not specified, the default value will be used.
+                    #
+                    # Possible parameters are:
+                    #   midinote (Default 0)    : MIDI note to which the sample will be assigned
+                    #
+                    #   velocity (Default 127)  : MIDI velocity to which the sample will be assigned,
+                    #                             Undefined Lower and higher velocities will be interpolated
+                    #                             (See loop for "# Fill in/transpose missing samples" below)
+                    #
+                    #   notename (Default '')   : Note name to which the sample will be assigned, this may be 
+                    #                             used instead of midinote
+                    #
+                    # For Example:
+                    #   bruh.wav, %midinote=60, %velocity=100
+                    # 
+                    # Will load the sample bruh.wav at midinote 60 and velocity 100.
+                    #
+                    # Altough somewhat confusing, the %midinote and %velocity parameters
+                    # are also used as file patterns to match filenames that contain the
+                    # midinote or notename in its filename.
+                    #
+                    # For Example:
+                    #  %drum%midinote.wav, %velocity=100
+                    #
+                    # Will match all files that contain "drum" followed by midinote number, and
+                    # load them at their corresponding midi number with velocity 100.
+
+                    sampleparams = {'midinote': '0', 'velocity': '127', 'notename': ''} # default parameters
+
+                    # Check if line overrides default parameters
+                    # If so, update sampleparams with the provided parameters
                     if len(pattern.split(',')) > 1:
-                        defaultparams.update(dict([item.split('=') for item in pattern.split(',', 1)[1].replace(' ', '').replace('%', '').split(',')]))
+                        sampleparams.update(dict([item.split('=') for item in pattern.split(',', 1)[1].replace(' ', '').replace('%', '').split(',')]))
+                    
+                    # Get pattern to match filenames targeted by the filepattern
                     pattern = pattern.split(',')[0]
                     pattern = re.escape(pattern.strip())  # note for Python 3.7+: "%" is no longer escaped with "\"
                     pattern = pattern.replace(r"%midinote", r"(?P<midinote>\d+)").replace(r"%velocity", r"(?P<velocity>\d+)")\
                                      .replace(r"%notename", r"(?P<notename>[A-Ga-g]#?[0-9])").replace(r"\*", r".*?").strip()    # .*? => non greedy
-                    for fname in os.listdir(dirname):
+                    
+                    for fname in os.listdir(presetpath):
+                        # Check if loading has been interrupted
+                        # by a new preset being selected
                         if LoadingInterrupt:
                             return
+                        
+                        # Check if filename matches pattern
                         m = re.match(pattern, fname)
+                        
                         if m:
+                            # If filename contains midinote or notename, use it
+                            # Otherwise use the the parameters provided by the
+                            # sampleparams dictionary (Either default or from
+                            # overrides the definition file)
                             info = m.groupdict()
-                            midinote = int(info.get('midinote', defaultparams['midinote']))
-                            velocity = int(info.get('velocity', defaultparams['velocity']))
-                            notename = info.get('notename', defaultparams['notename'])
+                            midinote = int(info.get('midinote', sampleparams['midinote']))
+                            velocity = int(info.get('velocity', sampleparams['velocity']))
+                            notename = info.get('notename', sampleparams['notename'])
+                            
                             if notename:
                                 midinote = NOTES.index(notename[:-1].lower()) + (int(notename[-1])+2) * 12
-                            samples[midinote, velocity] = Sound(os.path.join(dirname, fname), midinote, velocity)
-                except:
+                            
+                            # Load sample at the specified midinote and velocity
+                            samples[midinote, velocity] = Sound(os.path.join(presetpath, fname), midinote, velocity)
+                except Exception as e:
                     print("Error in definition file, skipping line %s." % (i+1))
     else:
+        # No definition file found
+        # Load samples with filenames matching the midinote
+        # Ex: 0.wav, 1.wav, 2.wav, etc.
         for midinote in range(0, 127):
             if LoadingInterrupt:
                 return
-            file = os.path.join(dirname, "%d.wav" % midinote)
+            
+            file = os.path.join(presetpath, "%d.wav" % midinote)
+           
             if os.path.isfile(file):
                 samples[midinote, 127] = Sound(file, midinote, 127)
+    
     initial_keys = set(samples.keys())
+
+    # Fill in/transpose missing samples
     for midinote in range(128):
         lastvelocity = None
+
+        # Copies/Transposes defined samples to missing
+        # velocities
+        #
+        # All undefined velocities that are smaller than the first defined velocity
+        # get the value of the first defined velocity.
+        # For example, suppose that a sample is defined at samples[60, 100], 
+        # but all samples at samples[60, 0-99] are missing. In this case,
+        # the sample at samples[60, 100] is copied to samples[60, 0-99].
+        # 
+        # After that, all undefined velocities that are larger than the last defined velocity
+        # get the value of the last defined velocity.
+        # For example, suppose that a sample is defined at samples[60, 100],
+        # but all samples at samples[60, 101-127] are missing. In this case,
+        # the sample at samples[60, 100] is copied to samples[60, 101-127].
+        #
         for velocity in range(128):
             if (midinote, velocity) not in initial_keys:
                 samples[midinote, velocity] = lastvelocity
@@ -357,17 +457,27 @@ def ActuallyLoad():
                     for v in range(velocity):
                         samples[midinote, v] = samples[midinote, velocity]
                 lastvelocity = samples[midinote, velocity]
+
+        # No defined velocity was found for this note,
+        # I.e this happens if no sample file was providedfor this note.
+        #
+        # Try to copy the sample from the previous midinote!
+        # NOTE: This means all samples before the first defined sample
+        # will remain blank (silence).
         if not lastvelocity:
             for velocity in range(128):
                 try:
                     samples[midinote, velocity] = samples[midinote-1, velocity]
                 except:
                     pass
+    
+    # Report if preset is empty
     if len(initial_keys) > 0:
         print('Preset loaded: ' + str(preset))
     else:
         print('Preset empty: ' + str(preset))
         double_7seg.display2CharsTemporary("EP", 1)
+
     double_7seg.displayNumber(preset)
 
 #########################################
