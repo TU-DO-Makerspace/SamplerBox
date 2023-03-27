@@ -156,6 +156,30 @@ globaltranspose = 0
 if USE_DOUBLE_7SEGMENT_DISPLAY:
     import zerorpc
 
+# The display server is used to allow multiple processes to access the display
+# simultaneously, in our case samplerbox.py and volume_control.py. The display is
+# composed of two layers:
+#
+# Layer 1: Symbols displayed on this layer are always visible unless Layer 2
+#          is active. This layer should be used for symbols that are generally
+#          useful to the user. Currently, it is only used to display the current
+#          preset number.
+#          
+#          Functions that write to Layer 1 are:
+#           - displayNumber(n)
+#           - display2Chars(s)
+#
+# Layer 2: Symbols displayed on this layer are temporary and are displayed
+#          on top of the symbols on Layer 1. They can only be displayed for a
+#          limited time, after which the display reverts to Layer 1. This layer
+#          should be used for symbols that need to be displayed temporarily,
+#          such as the new volume level after the volume has been changed, or
+#          to indicate if a preset is empty.
+# 
+#          Functions that write to Layer 2 are:
+#           - displayNumberTemporary(n, t)
+#           - display2CharsTemporary(s, t)
+
     class Double7Segment(object):
         def __init__(self):
             self.init_success = False
