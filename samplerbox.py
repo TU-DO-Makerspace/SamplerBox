@@ -297,22 +297,25 @@ def MidiCallback(message, time_stamp):
         # Note ON and velocity > 0
         if status == MIDI_MSG_NOTE_ON and velocity > 0:
             try:
+                # 
                 playingnotes.setdefault(midinote, []).append(samples[midinote, velocity].play(midinote))
             except:
                 pass
         
         # Note OFF or Note ON with velocity = 0
         else:
-            if midinote in playingnotes:
-                # If sustain pedal is on, then sustain all notes
-                # referenced by the midinote by adding them to the
-                # sustainplayingnotes list. Otherwise, fade out all
-                # notes referenced by the midinote.
-                for n in playingnotes[midinote]:
-                    if sustain:
-                        sustainplayingnotes.append(n)
-                    else:
-                        n.fadeout(50)
+            if not midinote in playingnotes:
+                return
+            
+            # If sustain pedal is on, then sustain all notes
+            # referenced by the midinote by adding them to the
+            # sustainplayingnotes list. Otherwise, fade out all
+            # notes referenced by the midinote.
+            for n in playingnotes[midinote]:
+                if sustain:
+                    sustainplayingnotes.append(n)
+                else:
+                    n.fadeout(50)
             
             playingnotes[midinote] = []
 
@@ -324,7 +327,7 @@ def MidiCallback(message, time_stamp):
         LoadSamples()
         
     # Sustain pedal message
-    if status == MIDI_MSG_CC and data1 == MIDI_CC_MSG_SUSTAIN:
+    elif status == MIDI_MSG_CC and data1 == MIDI_CC_MSG_SUSTAIN:
         # Sustain pedal on (data2 >= 64)
         if data2 >= 64:
             sustain = True
