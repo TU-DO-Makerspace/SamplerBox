@@ -214,59 +214,152 @@ else:
             pass
 
 #########################################
-# AUDIO AND MIDI CALLBACKS
+# AUDIO CALLBACK
 #
 #########################################
 
 def AudioCallback(outdata, frame_count, time_info, status):
     global playingsounds
+    
     rmlist = []
     playingsounds = playingsounds[-MAX_POLYPHONY:]
     b = samplerbox_audio.mixaudiobuffers(playingsounds, rmlist, frame_count, FADEOUT, FADEOUTLENGTH, SPEED)
+    
     for e in rmlist:
         try:
             playingsounds.remove(e)
         except:
             pass
+    
     b *= globalvolume
     outdata[:] = b.reshape(outdata.shape)
+
+#########################################
+# MIDI
+#
+#########################################
+
+## Constants for MIDI messages
+
+# Size and indices of MIDI messages
+MIDI_MSG_N_BYTES = 3        # Number of bytes in a MIDI message
+I_MIDI_MSG_STATUS_BYTE = 0  # Index of the status byte in a MIDI message
+I_MIDI_MSG_DATA_BYTE_1 = 1  # Index of the first data byte in a MIDI message
+I_MIDI_MSG_DATA_BYTE_2 = 2  # Index of the second data byte in a MIDI message
+
+# Status byte values
+MIDI_MSG_NOTE_OFF = 8       # Status byte value for note off messages
+MIDI_MSG_NOTE_ON = 9        # Status byte value for note on messages
+MIDI_MSG_CC = 11            # Status byte value for sustain messages
+MIDI_MSG_PORG_CHANGE = 12   # Status byte value for program change messages
+
+# CC messages (provided in data byte 1) 
+MIDI_CC_MSG_SUSTAIN = 64    # CC message for sustain pedal
 
 def MidiCallback(message, time_stamp):
     global playingnotes, sustain, sustainplayingnotes
     global preset
-    messagetype = message[0] >> 4
-    messagechannel = (message[0] & 15) + 1
-    note = message[1] if len(message) > 1 else None
-    midinote = note
-    velocity = message[2] if len(message) > 2 else None
-    if messagetype == 9 and velocity == 0:
-        messagetype = 8
-    if messagetype == 9:    # Note on
-        midinote += globaltranspose
-        try:
-            playingnotes.setdefault(midinote, []).append(samples[midinote, velocity].play(midinote))
-        except:
-            pass
-    elif messagetype == 8:  # Note off
-        midinote += globaltranspose
-        if midinote in playingnotes:
-            for n in playingnotes[midinote]:
-                if sustain:
-                    sustainplayingnotes.append(n)
-                else:
-                    n.fadeout(50)
+    
+    status = message[I_MIDI_MSG_STATUS_BYTE] >> 4
+    channel = (message[I_MIDI_MSG_STATUS_BYTE] & 15) + 1
+    data1 = message[I_MIDI_MSG_DATA_BYTE_1] if len(message) > 1 else None
+    data2 = message[I_MIDI_MSG_DATA_BYTE_2] if len(message) > 2 else None
+
+    # Note ON/OFF messages
+    if status == MIDI_MSG_NOTE_ON or status == MIDI_MSG_NOTE_OFF:
+        midinote = data1 + globaltranspose
+        velocity = data2
+
+        # Note ON and velocity > 0
+        if status == MIDI_MSG_NOTE_ON and velocity > 0:
+            try:
+                playingnotes.setdefault(midinote, []).append(samples[midinote, velocity].play(midinote))
+            except:
+                pass
+        
+        # Note OFF or Note ON with velocity = 0
+        else:
+            if midinote in playingnotes:
+                # If sustain pedal is on, then sustain all notes
+                # referenced by the midinote by adding them to the
+                # sustainplayingnotes list. Otherwise, fade out all
+                # notes referenced by the midinote.
+                for n in playingnotes[midinote]:
+                    if sustain:
+                        sustainplayingnotes.append(n)
+                    else:
+                        n.fadeout(50)
+            
             playingnotes[midinote] = []
-    elif messagetype == 12:  # Program change
-        print('Program change ' + str(note))
-        preset = note
+
+    # Program change message
+    elif status == MIDI_MSG_PORG_CHANGE:
+        programnumber = data1
+        print('Program change ' + str(programnumber))
+        preset = programnumber
         LoadSamples()
-    elif (messagetype == 11) and (note == 64) and (velocity < 64):  # sustain pedal off
-        for n in sustainplayingnotes:
-            n.fadeout(50)
-        sustainplayingnotes = []
-        sustain = False
-    elif (messagetype == 11) and (note == 64) and (velocity >= 64):  # sustain pedal on
-        sustain = True
+        
+    # Sustain pedal message
+    if status == MIDI_MSG_CC and data1 == MIDI_CC_MSG_SUSTAIN:
+        # Sustain pedal on (data2 >= 64)
+        if data2 >= 64:
+            sustain = True
+
+        # Sustain pedal off (data2 <= 63)
+        else:
+            for n in sustainplayingnotes:
+                n.fadeout(50)
+            sustainplayingnotes = []
+            sustain = False
+
+## MIDI IN via SERIAL PORT
+if USE_SERIALPORT_MIDI:
+    import serial
+
+    # Open serial port
+    ser = serial.Serial('/dev/serial0', baudrate=38400)
+    # NOTE: Although the serial port here is opened with 38400 baud, it's a hack and actually runs at 31250 baud.
+    #       This hack requires to also "underclock" the UART0 peripheral clock in /boot/config.tx and .boot/cmdline.txt
+    #       See     : https://www.raspberrypi.org/forums/viewtopic.php?t=161577
+    #       And/Or  : http://m0xpd.blogspot.com/2013/01/midi-controller-on-rpi.html
+    #
+    #       Providing a baudrate of 31250 does not work, as the Pi serial driver does not officially support this
+    #       baudrate. Attempting to do so will deliver some jankey data when attempting to read MIDI messages over
+    #       the serial port.
+
+    def MidiSerialReader():
+        message = [0, 0, 0]
+        
+        while True:
+            i = 0
+            while i < MIDI_MSG_N_BYTES:
+                data = ord(ser.read(1))  # read a byte
+                
+                # Check for beginning of a MIDI message
+                is_status = data >> 7 != 0
+                if is_status:
+                    i = I_MIDI_MSG_STATUS_BYTE
+                
+                message[i] = data
+                
+                # Check for program change message
+                # If detected, ignore the second data byte as
+                # it is not required for program change messages
+                prog_change_detected = (i == I_MIDI_MSG_DATA_BYTE_1 and 
+                                        message[I_MIDI_MSG_STATUS_BYTE] >> 4 == MIDI_MSG_PORG_CHANGE)
+                
+                if prog_change_detected:
+                    message[I_MIDI_MSG_DATA_BYTE_2] = 0
+                    break
+
+                i += 1
+                    
+            MidiCallback(message, None)
+    
+    MidiThread = threading.Thread(target=MidiSerialReader)
+    MidiThread.daemon = True
+    MidiThread.start()
+
 
 #########################################
 # LOAD SAMPLES
@@ -541,65 +634,6 @@ if USE_BUTTONS:
     ButtonsThread = threading.Thread(target=HandleButtons)
     ButtonsThread.daemon = True
     ButtonsThread.start()
-
-#########################################
-# MIDI IN via SERIAL PORT
-#
-#########################################
-
-if USE_SERIALPORT_MIDI:
-    import serial
-
-    # Open serial port
-    ser = serial.Serial('/dev/serial0', baudrate=38400)
-    # NOTE: Although the serial port here is opened with 38400 baud, it's a hack and actually runs at 31250 baud.
-    #       This hack requires to also "underclock" the UART0 peripheral clock in /boot/config.tx and .boot/cmdline.txt
-    #       See     : https://www.raspberrypi.org/forums/viewtopic.php?t=161577
-    #       And/Or  : http://m0xpd.blogspot.com/2013/01/midi-controller-on-rpi.html
-    #
-    #       Providing a baudrate of 31250 does not work, as the Pi serial driver does not officially support this
-    #       baudrate. Attempting to do so will deliver some jankey data when attempting to read MIDI messages over
-    #       the serial port.
-
-    # Constants for MIDI messages
-    MIDI_MSG_N_BYTES = 3        # Number of bytes in a MIDI message
-    I_MIDI_MSG_STATUS_BYTE = 0  # Index of the status byte in a MIDI message
-    I_MIDI_MSG_DATA_BYTE_1 = 1  # Index of the first data byte in a MIDI message
-    I_MIDI_MSG_DATA_BYTE_2 = 2  # Index of the second data byte in a MIDI message
-    MIDI_MSG_PORG_CHANGE = 12   # Status byte value for program change messages
-
-    def MidiSerialReader():
-        message = [0, 0, 0]
-        
-        while True:
-            i = 0
-            while i < MIDI_MSG_N_BYTES:
-                data = ord(ser.read(1))  # read a byte
-                
-                # Check for beginning of a MIDI message
-                is_status = data >> 7 != 0
-                if is_status:
-                    i = I_MIDI_MSG_STATUS_BYTE
-                
-                message[i] = data
-                
-                # Check for program change message
-                # If detected, ignore the second data byte as
-                # it is not required for program change messages
-                prog_change_detected = (i == I_MIDI_MSG_DATA_BYTE_1 and 
-                                        message[I_MIDI_MSG_STATUS_BYTE] >> 4 == MIDI_MSG_PORG_CHANGE)
-                
-                if prog_change_detected:
-                    message[I_MIDI_MSG_DATA_BYTE_2] = 0
-                    break
-
-                i += 1
-                    
-            MidiCallback(message, None)
-    
-    MidiThread = threading.Thread(target=MidiSerialReader)
-    MidiThread.daemon = True
-    MidiThread.start()
 
 #########################################
 # LOAD FIRST SOUNDBANK
