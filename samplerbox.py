@@ -423,7 +423,7 @@ def ActuallyLoad():
     samples = {}                     # clear samples
     globalvolume = 10 ** (-12.0/20)  # -12dB default global volume
     globaltranspose = 0              # no transpose by default
-    double_7seg = Double7Segment()   # init 7-segment display
+    double_7seg = Double7Segment()   # init 7-segment display (Must be seperately initialized for each thread)
 
     # Find directory containing samples for the current preset
     # The directory name must start with the preset number followed by a space
@@ -486,15 +486,16 @@ def ActuallyLoad():
                     # 
                     # Will load the sample bruh.wav at midinote 60 and velocity 100.
                     #
-                    # Altough somewhat confusing, the %midinote and %velocity parameters
-                    # are also used as file patterns to match filenames that contain the
-                    # midinote or notename in its filename.
+                    # Altough somewhat confusing, the parameters may also
+                    # be used as file patterns to match filenames.
                     #
                     # For Example:
                     #  %drum%midinote.wav, %velocity=100
                     #
                     # Will match all files that contain "drum" followed by midinote number, and
                     # load them at their corresponding midi number with velocity 100.
+                    # 
+                    # File patterns can also be combined.
 
                     sampleparams = {'midinote': '0', 'velocity': '127', 'notename': ''} # default parameters
 
@@ -504,9 +505,9 @@ def ActuallyLoad():
                         sampleparams.update(dict([item.split('=') for item in pattern.split(',', 1)[1].replace(' ', '').replace('%', '').split(',')]))
                     
                     # Get pattern to match filenames targeted by the filepattern
-                    pattern = pattern.split(',')[0]
-                    pattern = re.escape(pattern.strip())  # note for Python 3.7+: "%" is no longer escaped with "\"
-                    pattern = pattern.replace(r"%midinote", r"(?P<midinote>\d+)").replace(r"%velocity", r"(?P<velocity>\d+)")\
+                    filepattern = pattern.split(',')[0]
+                    filepattern = re.escape(filepattern.strip())  # note for Python 3.7+: "%" is no longer escaped with "\"
+                    filepattern_re = filepattern.replace(r"%midinote", r"(?P<midinote>\d+)").replace(r"%velocity", r"(?P<velocity>\d+)")\
                                      .replace(r"%notename", r"(?P<notename>[A-Ga-g]#?[0-9])").replace(r"\*", r".*?").strip()    # .*? => non greedy
                     
                     for fname in os.listdir(presetpath):
@@ -515,8 +516,8 @@ def ActuallyLoad():
                         if LoadingInterrupt:
                             return
                         
-                        # Check if filename matches pattern
-                        m = re.match(pattern, fname)
+                        # Check if filename matches filepattern
+                        m = re.match(filepattern_re, fname)
                         
                         if m:
                             # If filename contains midinote or notename, use it
