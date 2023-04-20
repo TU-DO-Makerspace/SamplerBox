@@ -328,7 +328,7 @@ def MidiCallback(message, time_stamp):
     elif status == MIDI_MSG_PORG_CHANGE:
         programnumber = data1
         print('Program change ' + str(programnumber))
-        preset = programnumber
+        preset[selectedchannel] = programnumber
         LoadSamples()
         
     # Sustain pedal message
@@ -440,18 +440,18 @@ def ActuallyLoad(channel):
     # The directory name must start with the preset number followed by a space
     # Ex: 0 saw, 1 piano, 2 drums, etc.
     samplesdir = SAMPLES_DIR if os.listdir(SAMPLES_DIR) else '.'                                    # use current folder (containing 0 Saw) if no user media containing samples has been found
-    basename = next((f for f in os.listdir(samplesdir) if f.startswith("%d " % preset)), None)      # find directory starting with preset number followed by a space
+    basename = next((f for f in os.listdir(samplesdir) if f.startswith("%d " % preset[channel])), None)      # find directory starting with preset number followed by a space
     
     # Report no directory could be found for the current preset
     if basename:
         presetpath = os.path.join(samplesdir, basename)
     else:
-        print('Preset empty: %s' % preset)
+        print('Preset empty: %s (CH %s)' % (preset[channel], channel + 1))
         double_7seg.display2CharsTemporary("EP", 1)
-        double_7seg.displayNumber(preset)
+        double_7seg.displayNumber(preset[channel])
         return
    
-    print('Preset loading: %s (%s)' % (preset, basename))
+    print('Preset loading: %s (CH %s) (%s)' % (preset[channel], channel + 1, basename))
     double_7seg.display2Chars("LO")
     definitionfile = os.path.join(presetpath, "definition.txt")
     
@@ -544,7 +544,7 @@ def ActuallyLoad(channel):
                                 midinote = NOTES.index(notename[:-1].lower()) + (int(notename[-1])+2) * 12
                             
                             # Load sample at the specified midinote and velocity
-                            samples[channel][channel][midinote, velocity] = Sound(os.path.join(presetpath, fname), midinote, velocity)
+                            samples[channel][midinote, velocity] = Sound(os.path.join(presetpath, fname), midinote, velocity)
                 except Exception as e:
                     print("Error in definition file, skipping line %s." % (i+1))
     else:
@@ -605,12 +605,12 @@ def ActuallyLoad(channel):
     
     # Report if preset is empty
     if len(initial_keys) > 0:
-        print('Preset loaded: ' + str(preset))
+        print('CH' + str(channel + 1) + ': Preset loaded: ' + str(preset[channel]))
     else:
-        print('Preset empty: ' + str(preset))
+        print('CH' + str(channel + 1) + ': Preset empty: ' + str(preset[channel]))
         double_7seg.display2CharsTemporary("EP", 1)
 
-    double_7seg.displayNumber(preset)
+    double_7seg.displayNumber(preset[channel])
 
 #########################################
 # OPEN AUDIO DEVICE
@@ -640,16 +640,18 @@ if USE_BUTTONS:
 
     def IncPreset():
         global preset
-        preset += 1
-        if preset > MAX_PRESETS:
-            preset = 0
+        global selectedchannel
+        preset[selectedchannel] += 1
+        if preset[selectedchannel] > MAX_PRESETS:
+            preset[selectedchannel] = 0
         LoadSamples()
 
     def DecPreset():
         global preset
-        preset -= 1
-        if preset < 0:
-            preset = MAX_PRESETS
+        global selectedchannel
+        preset[selectedchannel] -= 1
+        if preset[selectedchannel] < 0:
+            preset[selectedchannel] = MAX_PRESETS
         LoadSamples()
 
     # Handle button presses.
@@ -679,11 +681,49 @@ if USE_BUTTONS:
     ButtonsThread.start()
 
 #########################################
+# MIDI CHANNEL SELECTION FOR PRESETS
+#
+#########################################
+
+if USE_MULTIPLE_MIDI_CHANNELS:
+    if TARGET_PLATFORM != "RPI":
+        print("Multiple MIDI channels are only supported on Raspberry Pi!")
+        exit(1)
+
+    def HandleMidiChannelSelection():
+        global selectedchannel
+        
+        double_7seg = Double7Segment()
+        lastselectedchannel = selectedchannel
+        
+        while True:
+            if not GPIO.input(MIDI_CH_SELECT_SWITCH_LEFT) and GPIO.input(MIDI_CH_SELECT_SWITCH_RIGHT):
+                selectedchannel = 0
+            if not GPIO.input(MIDI_CH_SELECT_SWITCH_LEFT) and not GPIO.input(MIDI_CH_SELECT_SWITCH_RIGHT):
+                selectedchannel = 1
+            else:
+                selectedchannel = 2
+
+            if selectedchannel != lastselectedchannel:
+                double_7seg.displayNumber(preset[selectedchannel])
+                lastselectedchannel = selectedchannel
+                print("Selected MIDI channel: " + str(selectedchannel+1))
+            
+            time.sleep(0.02)
+
+    GPIO.setup(MIDI_CH_SELECT_SWITCH_LEFT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(MIDI_CH_SELECT_SWITCH_RIGHT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+    MidiChannelSelectionThread = threading.Thread(target=HandleMidiChannelSelection)
+    MidiChannelSelectionThread.daemon = True
+    MidiChannelSelectionThread.start()
+
+#########################################
 # LOAD FIRST SOUNDBANK
 #
 #########################################
 
-preset = 0
+preset = [0, 0, 0]
 
 for i in range(len(samples)):
     selectedchannel = i
