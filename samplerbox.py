@@ -140,7 +140,7 @@ FADEOUT = numpy.power(FADEOUT, 6)
 FADEOUT = numpy.append(FADEOUT, numpy.zeros(FADEOUTLENGTH, numpy.float32)).astype(numpy.float32)
 SPEED = numpy.power(2, numpy.arange(0.0, 84.0)/12).astype(numpy.float32)
 
-samples = {}
+samples = [{}, {}, {}]
 playingnotes = {}
 sustainplayingnotes = []
 sustain = False
@@ -303,11 +303,11 @@ def MidiCallback(message, time_stamp):
         if status == MIDI_MSG_NOTE_ON and velocity > 0:
             try:
                 # 
-                playingnotes.setdefault(midinote, []).append(samples[midinote, velocity].play(midinote))
+                playingnotes.setdefault(midinote, []).append(samples[channel - 1][midinote, velocity].play(midinote))
             except:
                 pass
         
-        # Note OFF or Note ON with velocity = 0
+        # Note OFF or Note ON with velocity = 0 
         else:
             if not midinote in playingnotes:
                 return
@@ -403,26 +403,27 @@ if USE_SERIALPORT_MIDI:
 #
 #########################################
 
-LoadingThread = None
-LoadingInterrupt = False
+LoadingThread = [None, None, None]
+LoadingInterrupt = [False, False, False]
 
 def LoadSamples():
     global LoadingThread
     global LoadingInterrupt
+    global selectedchannel
 
-    if LoadingThread:
-        LoadingInterrupt = True
-        LoadingThread.join()
-        LoadingThread = None
+    if LoadingThread[selectedchannel]:
+        LoadingInterrupt[selectedchannel] = True
+        LoadingThread[selectedchannel].join()
+        LoadingThread[selectedchannel] = None
 
-    LoadingInterrupt = False
-    LoadingThread = threading.Thread(target=ActuallyLoad)
-    LoadingThread.daemon = True
-    LoadingThread.start()
+    LoadingInterrupt[selectedchannel] = False
+    LoadingThread[selectedchannel] = threading.Thread(target=ActuallyLoad, args=(selectedchannel,))
+    LoadingThread[selectedchannel].daemon = True
+    LoadingThread[selectedchannel].start()
 
 NOTES = ["c", "c#", "d", "d#", "e", "f", "f#", "g", "g#", "a", "a#", "b"]
 
-def ActuallyLoad():
+def ActuallyLoad(channel):
     
     global preset
     global samples
@@ -430,7 +431,7 @@ def ActuallyLoad():
     global globalvolume, globaltranspose
 
     playingsounds = []               # stop all sounds
-    samples = {}                     # clear samples
+    samples[channel] = {}                     # clear samples
     globalvolume = 10 ** (-12.0/20)  # -12dB default global volume
     globaltranspose = 0              # no transpose by default
     double_7seg = Double7Segment()   # init 7-segment display (Must be seperately initialized for each thread)
@@ -523,7 +524,7 @@ def ActuallyLoad():
                     for fname in os.listdir(presetpath):
                         # Check if loading has been interrupted
                         # by a new preset being selected
-                        if LoadingInterrupt:
+                        if LoadingInterrupt[channel]:
                             return
                         
                         # Check if filename matches filepattern
@@ -543,7 +544,7 @@ def ActuallyLoad():
                                 midinote = NOTES.index(notename[:-1].lower()) + (int(notename[-1])+2) * 12
                             
                             # Load sample at the specified midinote and velocity
-                            samples[midinote, velocity] = Sound(os.path.join(presetpath, fname), midinote, velocity)
+                            samples[channel][channel][midinote, velocity] = Sound(os.path.join(presetpath, fname), midinote, velocity)
                 except Exception as e:
                     print("Error in definition file, skipping line %s." % (i+1))
     else:
@@ -551,15 +552,15 @@ def ActuallyLoad():
         # Load samples with filenames matching the midinote
         # Ex: 0.wav, 1.wav, 2.wav, etc.
         for midinote in range(0, 127):
-            if LoadingInterrupt:
+            if LoadingInterrupt[channel]:
                 return
             
             file = os.path.join(presetpath, "%d.wav" % midinote)
            
             if os.path.isfile(file):
-                samples[midinote, 127] = Sound(file, midinote, 127)
+                samples[channel][midinote, 127] = Sound(file, midinote, 127)
     
-    initial_keys = set(samples.keys())
+    initial_keys = set(samples[channel].keys())
 
     # Fill in/transpose missing samples
     for midinote in range(128):
@@ -582,12 +583,12 @@ def ActuallyLoad():
         #
         for velocity in range(128):
             if (midinote, velocity) not in initial_keys:
-                samples[midinote, velocity] = lastvelocity
+                samples[channel][midinote, velocity] = lastvelocity
             else:
                 if not lastvelocity:
                     for v in range(velocity):
-                        samples[midinote, v] = samples[midinote, velocity]
-                lastvelocity = samples[midinote, velocity]
+                        samples[channel][midinote, v] = samples[channel][midinote, velocity]
+                lastvelocity = samples[channel][midinote, velocity]
 
         # No defined velocity was found for this note,
         # I.e this happens if no sample file was providedfor this note.
@@ -598,7 +599,7 @@ def ActuallyLoad():
         if not lastvelocity:
             for velocity in range(128):
                 try:
-                    samples[midinote, velocity] = samples[midinote-1, velocity]
+                    samples[channel][midinote, velocity] = samples[channel][midinote-1, velocity]
                 except:
                     pass
     
@@ -683,7 +684,12 @@ if USE_BUTTONS:
 #########################################
 
 preset = 0
-LoadSamples()
+
+for i in range(len(samples)):
+    selectedchannel = i
+    LoadSamples()
+
+selectedchannel = 0 # MIDI channel 1
 
 #########################################
 # SYSTEM LED
