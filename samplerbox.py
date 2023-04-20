@@ -154,6 +154,11 @@ globaltranspose = 0
 #########################################
 
 if USE_DOUBLE_7SEGMENT_DISPLAY:
+
+    if TARGET_PLATFORM != "RPI":
+        print("ERROR: Double 7-segment display is only supported on Raspberry Pi")
+        sys.exit(1)
+
     import zerorpc
 
 # The display server is used to allow multiple processes to access the display
@@ -341,6 +346,11 @@ def MidiCallback(message, time_stamp):
 
 ## MIDI IN via SERIAL PORT
 if USE_SERIALPORT_MIDI:
+
+    if TARGET_PLATFORM != "RPI":
+        print("ERROR: Serial port MIDI is only supported on Raspberry Pi")
+        exit(1)
+
     import serial
 
     # Open serial port
@@ -620,6 +630,10 @@ except:
 #########################################
 
 if USE_BUTTONS:
+    if TARGET_PLATFORM != "RPI":
+        print("Buttons are only supported on Raspberry Pi!")
+        exit(1)
+
     import RPi.GPIO as GPIO
     DEBOUNCE_TIME = 0.2  # seconds
 
@@ -676,6 +690,10 @@ LoadSamples()
 #
 #########################################
 if USE_SYSTEMLED:
+    if TARGET_PLATFORM != "RPI":
+        print("System LED is only supported on Raspberry Pi!")
+        exit(1)
+
     os.system("modprobe ledtrig_heartbeat")
     os.system("echo heartbeat >/sys/class/leds/led0/trigger")
 
