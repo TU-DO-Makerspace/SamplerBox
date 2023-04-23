@@ -17,8 +17,13 @@ MAX_PRESETS = 99                        # The maximum number of presets to load 
 USE_BUTTONS = False                     # Set to True to use momentary buttons (connected to RaspberryPi's GPIO pins) to change preset
 BUTTON_PREV = 18                        # The GPIO pin to use for the previous preset button
 BUTTON_NEXT = 17                        # The GPIO pin to use for the next preset button
-USE_DOUBLE_7SEGMENT_DISPLAY = False      # Set to True to use a double 7-segment display (connected to RaspberryPi's GPIO pins)
-USE_SERIALPORT_MIDI = False              # Set to True to enable MIDI IN via SerialPort (e.g. RaspberryPi's GPIO UART pins)
-USE_MUTE_LED = False                     # Set to True to use a LED to indicate mute status (connected to RaspberryPi's GPIO pins)
+USE_DOUBLE_7SEGMENT_DISPLAY = False     # Set to True to use a double 7-segment display (connected to RaspberryPi's GPIO pins)
+USE_SERIALPORT_MIDI = False             # Set to True to enable MIDI IN via SerialPort (e.g. RaspberryPi's GPIO UART pins)
+USE_MUTE_LED = False                    # Set to True to use a LED to indicate mute status (connected to RaspberryPi's GPIO pins)
 GPIO_MUTE_LED = 17                      # The GPIO pin to use for the mute LED
-USE_SYSTEMLED = False                    # Flashing LED after successful boot, only works on RPi/Linux
+USE_SYSTEMLED = False                   # Flashing LED after successful boot, only works on RPi/Linux
+USE_3_MIDICHANNELS = True		# Setting true allows to load 3 different sample sets on 3 different MIDI channels
+					# We're using three as this option was tailored for the Arturia Beatstep Pro, which
+					# can independently sequence 3 MIDI channels.
+MIDI_CH_SELECT_SWITCH_LEFT = 23		# MIDI Channel 3-way switch left pin
+MIDI_CH_SELECT_SWITCH_RIGHT = 24	# MIDI Channel 3-way switch right pin

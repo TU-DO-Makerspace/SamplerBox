@@ -290,7 +290,13 @@ def MidiCallback(message, time_stamp):
     global preset
     
     status = message[I_MIDI_MSG_STATUS_BYTE] >> 4
-    channel = (message[I_MIDI_MSG_STATUS_BYTE] & 15) + 1
+
+    # Grab midi channel if we're using 3 midi channels mode
+    if USE_3_MIDICHANNELS:
+        channel = (message[I_MIDI_MSG_STATUS_BYTE] & 15) + 1
+    else:
+        channel = 1
+
     data1 = message[I_MIDI_MSG_DATA_BYTE_1] if len(message) > 1 else None
     data2 = message[I_MIDI_MSG_DATA_BYTE_2] if len(message) > 2 else None
 
@@ -302,7 +308,6 @@ def MidiCallback(message, time_stamp):
         # Note ON and velocity > 0
         if status == MIDI_MSG_NOTE_ON and velocity > 0:
             try:
-                # 
                 playingnotes.setdefault(midinote, []).append(samples[channel - 1][midinote, velocity].play(midinote))
             except:
                 pass
@@ -685,7 +690,7 @@ if USE_BUTTONS:
 #
 #########################################
 
-if USE_MULTIPLE_MIDI_CHANNELS:
+if USE_3_MIDICHANNELS:
     if TARGET_PLATFORM != "RPI":
         print("Multiple MIDI channels are only supported on Raspberry Pi!")
         exit(1)
@@ -725,8 +730,16 @@ if USE_MULTIPLE_MIDI_CHANNELS:
 
 preset = [0, 0, 0]
 
-for i in range(len(samples)):
-    selectedchannel = i
+if USE_3_MIDICHANNELS:
+    for i in range(len(samples)):
+        selectedchannel = i
+        LoadSamples()
+
+# May seem confusing, but provides simple hacky code compatibility.
+# The MidiCallback() function will route any incoming MIDI messages
+# to selectedchannel = 0
+else:
+    selectedchannel = 0
     LoadSamples()
 
 selectedchannel = 0 # MIDI channel 1
