@@ -695,6 +695,8 @@ if USE_3_MIDICHANNELS:
         print("Multiple MIDI channels are only supported on Raspberry Pi!")
         exit(1)
 
+    import RPi.GPIO as GPIO
+
     def HandleMidiChannelSelection():
         global selectedchannel
         
@@ -704,7 +706,7 @@ if USE_3_MIDICHANNELS:
         while True:
             if not GPIO.input(MIDI_CH_SELECT_SWITCH_LEFT) and GPIO.input(MIDI_CH_SELECT_SWITCH_RIGHT):
                 selectedchannel = 0
-            if not GPIO.input(MIDI_CH_SELECT_SWITCH_LEFT) and not GPIO.input(MIDI_CH_SELECT_SWITCH_RIGHT):
+            elif GPIO.input(MIDI_CH_SELECT_SWITCH_LEFT) and GPIO.input(MIDI_CH_SELECT_SWITCH_RIGHT):
                 selectedchannel = 1
             else:
                 selectedchannel = 2
