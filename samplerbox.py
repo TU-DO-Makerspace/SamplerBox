@@ -803,7 +803,7 @@ while True:
             # Ignore MIDI input for a few seconds after boot
             now = time.time()
             while time.time() < now + ignore_midi_for_seconds:
-                midi_in[-1].get_message()
+                midi_in.get_message()
 
             midi_in.callback = MidiCallback     # Callback for incoming MIDI messages
             midi_in_listeners.append(midi_in)   # Add to list of MIDI input listeners
